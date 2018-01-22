@@ -16,8 +16,8 @@ private let COLORS: [Color4] = [
 
 
 private func get_random_color() -> Color4 {
-    let i = random_range(0, COLORS.count - 1)
-    return COLORS[i]
+    let i = random_range(lower: 0, Float(COLORS.count - 1))
+    return COLORS[Int(i)]
 }
 
 
@@ -46,8 +46,8 @@ struct Flare {
 
     func pointAtTime(secs: Float, orig_pos: Vector3) -> Vector3 {
         var ret = orig_pos
-        ret.x += _get_flight(velocity_vec.x, secs: secs)
-        ret.y += _get_flight(velocity_vec.y, secs: secs)
+        ret.x += _get_flight(vel: velocity_vec.x, secs: secs)
+        ret.y += _get_flight(vel: velocity_vec.y, secs: secs)
         //ret.z += _get_flight(velocity_vec.z, secs: secs)
 
         // Gravity
@@ -75,18 +75,18 @@ class Firework : Drawable {
 
     // Create a random firework
     init(time: TimeUS, aspect_x: Float) {
-        let pos_x = random_range(-0.8, 0.8)
-        let pos_y = random_range(0.0, 0.8)
+        let pos_x = random_range(lower: -0.8, 0.8)
+        let pos_y = random_range(lower: 0.0, 0.8)
 
         // It's cool to set this at -0.2 and see the fireworks as they pop
         // through the back plane
         let pos_z = Float(0.1)
 
         self.pos = Vector3(x: pos_x, y: pos_y, z: pos_z)
-        self.type = random_range(0, 1)
+        self.type = random_range(lower: 0, 1)
         self.start_time = time
 
-        self.add_flares(aspect_x)
+        self.add_flares(aspect_x: aspect_x)
     }
 
     private func add_flares(aspect_x: Float) {
@@ -106,21 +106,21 @@ class Firework : Drawable {
             velocity.x *= aspect_x
 
             // velocity variance
-            let speed_variance = random_range(1.0, 1.5)
+            let speed_variance = random_range(lower: 1.0, 1.5)
             velocity.x *= VELOCITY * speed_variance
             velocity.y *= VELOCITY * speed_variance
 
             // color variance
             var color = orig_color
-            color.r += random_range(-0.3, 0.3)
-            color.b += random_range(-0.3, 0.3)
-            color.g += random_range(-0.3, 0.3)
-            color.a = random_range(0.7, 4.0)
+            color.r += random_range(lower: -0.3, 0.3)
+            color.b += random_range(lower: -0.3, 0.3)
+            color.g += random_range(lower: -0.3, 0.3)
+            color.a = random_range(lower: 0.7, 4.0)
 
             // other variance
-            let duration_secs = random_range(0.5, 3.0)
-            let trail_secs = random_range(0.3, 0.7)
-            let size = random_range(0.003, 0.005)
+            let duration_secs = random_range(lower: 0.5, 3.0)
+            let trail_secs = random_range(lower: 0.3, 0.7)
+            let size = random_range(lower: 0.003, 0.005)
 
             let f = Flare(velocity_vec: velocity,
                         size: size,
@@ -139,31 +139,31 @@ class Firework : Drawable {
     }
 
     func draw(time: TimeUS, 
-            inout bv: BufferWrapper, 
-            inout bc: BufferWrapper) {
-        let secs = self.getSecondsElapsed(time)
+              bv: inout BufferWrapper,
+              bc: inout BufferWrapper) {
+        let secs = self.getSecondsElapsed(time: time)
         if self.type == 0 {
             // classic particle only
             for flare in self.m_flares {
-                render_flare_simple(flare, secs: secs, bv: &bv, bc: &bc) 
+                render_flare_simple(flare: flare, secs: secs, bv: &bv, bc: &bc)
             }
         } else {
             // long trail
             for flare in self.m_flares {
-                render_flare_trail(flare, secs: secs, bv: &bv, bc: &bc) 
+                render_flare_trail(flare: flare, secs: secs, bv: &bv, bc: &bc)
             }
         }
     }
 
     @inline(never)
     func render_flare_simple(flare: Flare, secs: Float,
-                             inout bv: BufferWrapper, inout bc: BufferWrapper) 
+                             bv: inout BufferWrapper, bc: inout BufferWrapper)
     {
         if secs > flare.duration_secs {
             return
         }
-        let p = flare.pointAtTime(secs, orig_pos: self.pos)
-        var color = flare.colorAtTime(secs)
+        let p = flare.pointAtTime(secs: secs, orig_pos: self.pos)
+        var color = flare.colorAtTime(secs: secs)
         if secs > (flare.duration_secs - 0.1) {
             // flash out
             color.a = 1.0
@@ -178,7 +178,7 @@ class Firework : Drawable {
 
     @inline(never)
     func render_flare_trail(flare: Flare, secs: Float,
-                            inout bv: BufferWrapper, inout bc: BufferWrapper) 
+                            bv: inout BufferWrapper, bc: inout BufferWrapper)
     {
         // If this is too small, flickering happens when the dots move
         let PLUME_STEP_SECS: Float  = 0.02
@@ -187,13 +187,13 @@ class Firework : Drawable {
         if secs > flare.duration_secs {
             return
         }
-        var color = flare.colorAtTime(secs)
+        var color = flare.colorAtTime(secs: secs)
         var plume_secs = Float(0)
         var size = flare.size
         var first = true
 
         while true {
-            let p = flare.pointAtTime(secs, orig_pos: self.pos)
+            let p = flare.pointAtTime(secs: secs, orig_pos: self.pos)
             draw_triangle_2d(&bv, p, width: size, height: size)
             draw_triangle_color(&bc, color)
             if first {
@@ -214,9 +214,9 @@ class Firework : Drawable {
 }
 
 
-private func draw_triangle_2d(inout b: BufferWrapper, 
+private func draw_triangle_2d(_ b: inout BufferWrapper,
         _ pos: Vector3, width: Float, height: Float) {
-    guard b.has_available(12) else {
+    guard b.has_available(len: 12) else {
         return
     }
 
@@ -237,8 +237,8 @@ private func draw_triangle_2d(inout b: BufferWrapper,
 }
 
 
-private func draw_triangle_color(inout b: BufferWrapper, _ color: Color4) {
-    guard b.has_available(12) else {
+private func draw_triangle_color(_ b: inout BufferWrapper, _ color: Color4) {
+    guard b.has_available(len: 12) else {
         return
     }
 

@@ -2,6 +2,7 @@ import func Foundation.random
 import func Foundation.sqrtf
 import func Foundation.sinf
 import func Foundation.cosf
+import Foundation
 
 
 private let PI = 3.1415926535
@@ -28,7 +29,8 @@ struct Color4 {
 
 // Return Float in range [0, 1]
 func random_float() -> Float {
-    let ret = Float(random()) / Float(Int32.max)
+    let ret = Float(arc4random_uniform(UInt32(Int32.max))) / Float(Int32.max)
+    
     precondition(ret >= 0)
     precondition(ret <= 1)
     return ret
@@ -38,7 +40,7 @@ func random_float() -> Float {
 // Return Float in range [lower, upper]
 func random_range(lower: Float, _ upper: Float) -> Float {
     precondition(lower <= upper)
-    if RANDOM_RANGE_DEBUG { return random_choose(lower, upper); }
+    if RANDOM_RANGE_DEBUG { return random_choose(a: lower, upper); }
     let rand = random_float()
     let delta = upper - lower
     let ret = (rand * delta) + lower
@@ -51,9 +53,9 @@ func random_range(lower: Float, _ upper: Float) -> Float {
 // Return Int in range [lower, upper]
 func random_range(lower: Int, _ upper: Int) -> Int {
     precondition(lower <= upper)
-    if RANDOM_RANGE_DEBUG { return random_choose(lower, upper); }
+    if RANDOM_RANGE_DEBUG { return random_choose(a: lower, upper); }
     let delta = upper - lower
-    let ret = (Int(random()) % (delta + 1)) + lower
+    let ret = (Int(arc4random()) % (delta + 1)) + lower
     precondition(ret >= lower)
     precondition(ret <= upper)
     return ret
@@ -62,7 +64,7 @@ func random_range(lower: Int, _ upper: Int) -> Int {
 
 // Return either a or b
 func random_choose<T>(a: T, _ b: T) -> T {
-    let r = random() % 2
+    let r = arc4random() % 2
     if r == 0 {
         return a
     } else {
@@ -80,8 +82,8 @@ This gives better distribution than two random angles (which will produce
 more points clustered at the poles)
 */
 func RandomUniformUnitVector() -> Vector3 {
-    let angle = random_range(0.0, Float(2.0 * PI))
-    let r = sqrtf(random_range(0.0, 1.0))
+    let angle = random_range(lower: 0.0, Float(2.0 * PI))
+    let r = sqrtf(random_range(lower: 0.0, 1.0))
     let hemisphere = Float(1.0) // random_choose(-1.0, 1.0)
     let z = sqrtf(1.0 - r*r) * hemisphere
     return Vector3(x: r * cosf(angle), y: r * sinf(angle), z: z)
@@ -89,6 +91,6 @@ func RandomUniformUnitVector() -> Vector3 {
 
 
 func RandomUniformUnitVector2D() -> Vector3 {
-    let angle = random_range(0.0, Float(2.0 * PI))
+    let angle = random_range(lower: 0.0, Float(2.0 * PI))
     return Vector3(x: cosf(angle), y: sinf(angle), z: 0)
 }

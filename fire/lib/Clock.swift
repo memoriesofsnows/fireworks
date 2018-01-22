@@ -50,6 +50,6 @@ func clock_step_pause(usecs: Int) {
     if (g_clock_pause_time == 0) {
         clock_toggle_pause()
     } else {
-        g_clock_pause_time += usecs
+        g_clock_pause_time = g_clock_pause_time + Int64(usecs)
     }
 }

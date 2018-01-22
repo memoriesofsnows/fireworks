@@ -1,7 +1,7 @@
 protocol Drawable {
     func draw(time: TimeUS, 
-        inout bv: BufferWrapper, 
-        inout bc: BufferWrapper)
+              bv: inout BufferWrapper,
+              bc: inout BufferWrapper)
 }
 
 
@@ -19,7 +19,7 @@ class FireworkScene {
         arm_stats()
     }
     
-    func set_screen_size(width width: Float, height: Float) {
+    func set_screen_size(width: Float, height: Float) {
         print("screen size change: \(width) x \(height)")
         let v = height / width
         x_aspect_ratio = v
@@ -36,20 +36,20 @@ class FireworkScene {
         let fw = Firework(time: current_time, aspect_x: x_aspect_ratio)
         m_fireworks.append(fw)
         while m_fireworks.count > 10 {
-            m_fireworks.removeAtIndex(0)
+            m_fireworks.remove(at: 0)
         }
     }
 
-    func update(inout bv bv: BufferWrapper, inout bc: BufferWrapper) {
+    func update( bv: inout BufferWrapper, bc: inout BufferWrapper) {
         let curtime = get_current_timestamp()
 
         if curtime > next_launch {
-            launch_firework(curtime)
-            next_launch = curtime + TimeUS(random_range(100000, 700000))
+            launch_firework(current_time: curtime)
+            next_launch = curtime + TimeUS(random_range(lower: 100000, 700000))
         }
 
         for fw in m_fireworks {
-            fw.draw(curtime, bv: &bv, bc: &bc)
+            fw.draw(time: curtime, bv: &bv, bc: &bc)
         }
 
         if bv.pos > self.stats_max_bv {

@@ -4,6 +4,7 @@ import MetalKit
 let BUFFER_BYTE_LEN = 10 * 1000 * 1000
 
 class GameViewController: NSViewController, MTKViewDelegate {
+    
     override var acceptsFirstResponder: Bool { return true }
 
     var device: MTLDevice! = nil
@@ -13,7 +14,7 @@ class GameViewController: NSViewController, MTKViewDelegate {
     var vertexBuffer: MTLBuffer! = nil
     var vertexColorBuffer: MTLBuffer! = nil
     
-    let inflightSemaphore = dispatch_semaphore_create(1)
+    let inflightSemaphore = DispatchSemaphore(value: 1)
     
     var fw_scene: FireworkScene! = nil
 
@@ -48,12 +49,12 @@ class GameViewController: NSViewController, MTKViewDelegate {
         
         // load any resources required for rendering
         let view = self.view as! MTKView
-        commandQueue = device.newCommandQueue()
+        commandQueue = device.makeCommandQueue()
         commandQueue.label = "main command queue"
         
-        let defaultLibrary = device.newDefaultLibrary()!
-        let fragmentProgram = defaultLibrary.newFunctionWithName("passThroughFragment")!
-        let vertexProgram = defaultLibrary.newFunctionWithName("passThroughVertex")!
+        let defaultLibrary = device.makeDefaultLibrary()!
+        let fragmentProgram = defaultLibrary.makeFunction(name: "passThroughFragment")!
+        let vertexProgram = defaultLibrary.makeFunction(name: "passThroughVertex")!
         
         let psd = MTLRenderPipelineDescriptor()
         psd.vertexFunction = vertexProgram
@@ -62,88 +63,140 @@ class GameViewController: NSViewController, MTKViewDelegate {
         psd.sampleCount = view.sampleCount
 
         // Enable blending
-        psd.colorAttachments[0].blendingEnabled = true
-        psd.colorAttachments[0].rgbBlendOperation = .Add
-        psd.colorAttachments[0].alphaBlendOperation = .Add
-        psd.colorAttachments[0].sourceRGBBlendFactor = .SourceAlpha
-        psd.colorAttachments[0].sourceAlphaBlendFactor = .SourceAlpha
-        psd.colorAttachments[0].destinationRGBBlendFactor = .OneMinusSourceAlpha
-        psd.colorAttachments[0].destinationAlphaBlendFactor = .OneMinusSourceAlpha
+        psd.colorAttachments[0].isBlendingEnabled = true
+        psd.colorAttachments[0].rgbBlendOperation = .add
+        psd.colorAttachments[0].alphaBlendOperation = .add
+        psd.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+        psd.colorAttachments[0].sourceAlphaBlendFactor = .sourceAlpha
+        psd.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        psd.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
         do {
-            try pipelineState = device.newRenderPipelineStateWithDescriptor(psd)
+            try pipelineState = device.makeRenderPipelineState(descriptor: psd)
         } catch let error {
             print("Failed to create pipeline state, error \(error)")
         }
         
-        vertexBuffer = device.newBufferWithLength(BUFFER_BYTE_LEN, options: [])
+        vertexBuffer = device.makeBuffer(length: BUFFER_BYTE_LEN, options: [])
         vertexBuffer.label = "vertices"
 
-        vertexColorBuffer = device.newBufferWithLength(BUFFER_BYTE_LEN, options: [])
+        vertexColorBuffer = device.makeBuffer(length: BUFFER_BYTE_LEN, options: [])
         vertexColorBuffer.label = "colors"
     }
     
-    func drawInMTKView(view: MTKView) {
-        dispatch_semaphore_wait(inflightSemaphore, DISPATCH_TIME_FOREVER)
-        
+    func draw(in view: MTKView) {
+        inflightSemaphore.wait();
         // get buffers ready for writing
         var bv = BufferWrapper(vertexBuffer)
         var bc = BufferWrapper(vertexColorBuffer)
-        clearBackground(&bv, &bc)
+        clearBackground(v: &bv, &bc)
         precondition(bv.pos == bc.pos)
         fw_scene.update(bv: &bv, bc: &bc)
         precondition(bv.pos == bc.pos)
-
+        
         let vertexCount = bv.pos / 4
         
-        let commandBuffer = commandQueue.commandBuffer()
-        commandBuffer.label = "Frame command buffer"
+        let commandBuffer = commandQueue.makeCommandBuffer()
+        commandBuffer?.label = "Frame command buffer"
         
         // use completion handler to signal the semaphore when this frame is
         // completed allowing the encoding of the next frame to proceed
         // use capture list to avoid any retain cycles if the command buffer
         // gets retained anywhere besides this stack frame
-        commandBuffer.addCompletedHandler{ [weak self] commandBuffer in
+        commandBuffer?.addCompletedHandler{ [weak self] commandBuffer in
             if let strongSelf = self {
-                dispatch_semaphore_signal(strongSelf.inflightSemaphore)
+                strongSelf.inflightSemaphore.signal()
             }
             return
         }
         
-        if let renderPassDescriptor = view.currentRenderPassDescriptor, currentDrawable = view.currentDrawable
+        if let renderPassDescriptor = view.currentRenderPassDescriptor, let currentDrawable = view.currentDrawable
         {
             // If you want to play with not entirely clearing the background, but fading it.
             // I think it's too big of a hammer.
             //renderPassDescriptor.colorAttachments[0].loadAction = .Load
-       
             
             
-            let renderEncoder = commandBuffer.renderCommandEncoderWithDescriptor(renderPassDescriptor)
-            renderEncoder.label = "render encoder"
             
-            renderEncoder.pushDebugGroup("draw morphing triangle")
-            renderEncoder.setRenderPipelineState(pipelineState)
-            renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, atIndex: 0)
-            renderEncoder.setVertexBuffer(vertexColorBuffer, offset: 0, atIndex: 1)
-            renderEncoder.drawPrimitives(.Triangle, vertexStart: 0, vertexCount: vertexCount)
-            renderEncoder.popDebugGroup()
-            renderEncoder.endEncoding()
-                
-            commandBuffer.presentDrawable(currentDrawable)
+            let renderEncoder = commandBuffer?.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+            renderEncoder?.label = "render encoder"
+            
+            renderEncoder?.pushDebugGroup("draw morphing triangle")
+            renderEncoder?.setRenderPipelineState(pipelineState)
+            renderEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+            renderEncoder?.setVertexBuffer(vertexColorBuffer, offset: 0, index: 1)
+            renderEncoder?.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+            renderEncoder?.popDebugGroup()
+            renderEncoder?.endEncoding()
+            
+            commandBuffer?.present(currentDrawable)
         }
         
-        commandBuffer.commit()
+        commandBuffer?.commit()
     }
     
+    //replace
+//    func drawInMTKView(view: MTKView) {
+//        inflightSemaphore.wait();
+//        print("sssss")
+//        // get buffers ready for writing
+//        var bv = BufferWrapper(vertexBuffer)
+//        var bc = BufferWrapper(vertexColorBuffer)
+//        clearBackground(v: &bv, &bc)
+//        precondition(bv.pos == bc.pos)
+//        fw_scene.update(bv: &bv, bc: &bc)
+//        precondition(bv.pos == bc.pos)
+//
+//        let vertexCount = bv.pos / 4
+//
+//        let commandBuffer = commandQueue.makeCommandBuffer()
+//        commandBuffer?.label = "Frame command buffer"
+//
+//        // use completion handler to signal the semaphore when this frame is
+//        // completed allowing the encoding of the next frame to proceed
+//        // use capture list to avoid any retain cycles if the command buffer
+//        // gets retained anywhere besides this stack frame
+//        commandBuffer?.addCompletedHandler{ [weak self] commandBuffer in
+//            if let strongSelf = self {
+//                strongSelf.inflightSemaphore.signal()
+//            }
+//            return
+//        }
+//
+//        if let renderPassDescriptor = view.currentRenderPassDescriptor, let currentDrawable = view.currentDrawable
+//        {
+//            // If you want to play with not entirely clearing the background, but fading it.
+//            // I think it's too big of a hammer.
+//            //renderPassDescriptor.colorAttachments[0].loadAction = .Load
+//
+//
+//
+//            let renderEncoder = commandBuffer?.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+//            renderEncoder?.label = "render encoder"
+//
+//            renderEncoder?.pushDebugGroup("draw morphing triangle")
+//            renderEncoder?.setRenderPipelineState(pipelineState)
+//            renderEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+//            renderEncoder?.setVertexBuffer(vertexColorBuffer, offset: 0, index: 1)
+//            renderEncoder?.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+//            renderEncoder?.popDebugGroup()
+//            renderEncoder?.endEncoding()
+//
+//            commandBuffer?.present(currentDrawable)
+//        }
+//
+//        commandBuffer?.commit()
+//    }
     
-    func mtkView(view: MTKView, drawableSizeWillChange size: CGSize) {
+    
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         fw_scene.set_screen_size(width: Float(size.width), 
                 height: Float(size.height))
     }
 
 
     // Draw two triangles and clear the background.
-    func clearBackground(inout v: BufferWrapper, inout _ c: BufferWrapper) {
+    func clearBackground( v: inout BufferWrapper, _ c: inout BufferWrapper) {
         let vertexBackground:[Float] = [
          -1.0, -1.0, 0.0, 1.0,
          -1.0,  1.0, 0.0, 1.0,
@@ -173,16 +226,16 @@ class GameViewController: NSViewController, MTKViewDelegate {
         }
     }
 
-    override func keyDown(theEvent: NSEvent) {
+    override func keyDown(with theEvent: NSEvent) {
         print(theEvent)
         if (theEvent.characters! == " ") {
             clock_toggle_pause()
         } else if (theEvent.characters! == "j") {
-            clock_step_pause(16667)
+            clock_step_pause(usecs: 16667)
         } else if (theEvent.characters! == "k") {
-            clock_step_pause(-16667)
+            clock_step_pause(usecs: -16667)
         } else {
-            super.keyDown(theEvent)
+            super.keyDown(with: theEvent)
         }
     }
     

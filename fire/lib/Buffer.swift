@@ -10,8 +10,8 @@ struct BufferWrapper {
 
     init (_ buffer: MTLBuffer) {
         // NB: MTLBuffer.length == bytes
-        let ptr = UnsafeMutablePointer<Float>(buffer.contents())
-        self.init(buffer: ptr, nr_elements: buffer.length / sizeof(Float))
+        let ptr = UnsafeMutablePointer<Float>.init(bitPattern: buffer.contents().hashValue)
+        self.init(buffer: ptr!, nr_elements: buffer.length / MemoryLayout<Float>.size)
     }
 
     init (buffer: UnsafeMutablePointer<Float>, nr_elements: Int) {
@@ -29,20 +29,20 @@ struct BufferWrapper {
     }
 
     // If capacity is full, do nothing
-    mutating func append(v: Float) {
-        guard has_available(1) else {
+    mutating func append(_ v: Float) {
+        guard has_available(len: 1) else {
             return
         }
         append_raw(v)
     }
 
-    mutating func append(v: Vector3) {
+    mutating func append(_ v: Vector3) {
         append(v.x)
         append(v.y)
         append(v.z)
     }
 
-    mutating func append(v: Color4) {
+    mutating func append(_ v: Color4) {
         append(v.r)
         append(v.g)
         append(v.b)
@@ -50,12 +50,12 @@ struct BufferWrapper {
     }
 
     // No capacity checks; caller must check beforehand 
-    mutating func append_raw(v: Float) {
+    mutating func append_raw(_ v: Float) {
         pdata[pos] = v
         pos = pos &+ 1
     }
 
-    mutating func append_raw_color4(v: Color4) {
+    mutating func append_raw_color4(_ v: Color4) {
         append_raw(v.r)
         append_raw(v.g)
         append_raw(v.b)
